@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Import from CSV</h1>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<p class="hint">
+  Export your Google Sheet or Excel file as CSV (File &rarr; Download &rarr; CSV), then upload it below.
+  Only rows with a non-empty transcript/remark will be imported, and you'll get to review, edit, tag,
+  or remove each one before anything is saved.
+</p>
+
+<form method="post" enctype="multipart/form-data" id="import-form">
+  <div class="field-row">
+    <label>Date
+      <input type="date" name="date" value="{{ today }}" required>
+    </label>
+    <label>Title / Property
+      <input type="text" name="title" list="titles" placeholder="e.g. Branded Offer" required>
+      <datalist id="titles">
+        {% for t in titles %}<option value="{{ t }}">{% endfor %}
+      </datalist>
+    </label>
+  </div>
+
+  <label>CSV file
+    <input type="file" name="csv_file" id="csv-file" accept=".csv" required>
+  </label>
+
+  <div class="field-row" id="column-pickers" style="display:none;">
+    <label>User ID column
+      <select name="user_id_col" id="user-id-col" required></select>
+    </label>
+    <label>Transcript / remark column
+      <select name="remark_col" id="remark-col" required></select>
+    </label>
+    <label>POC column (optional)
+      <select name="poc_col" id="poc-col"></select>
+    </label>
+  </div>
+
+  <button type="submit" class="primary">Parse &amp; Review</button>
+</form>
+
+<script>
+  document.getElementById('csv-file').addEventListener('change', function (e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (evt) {
+      const text = evt.target.result;
+      const firstLine = text.split(/\r\n|\n|\r/)[0];
+      const headers = parseCsvLine(firstLine);
+      populateSelect('user-id-col', headers);
+      populateSelect('remark-col', headers);
+      populateSelect('poc-col', headers, true);
+      document.getElementById('column-pickers').style.display = 'flex';
+    };
+    reader.readAsText(file);
+  });
+
+  function parseCsvLine(line) {
+    const result = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (line[i + 1] === '"') { cur += '"'; i++; }
+          else { inQuotes = false; }
+        } else { cur += ch; }
+      } else {
+        if (ch === '"') inQuotes = true;
+        else if (ch === ',') { result.push(cur); cur = ''; }
+        else cur += ch;
+      }
+    }
+    result.push(cur);
+    return result.map(function (s) { return s.trim(); });
+  }
+
+  function populateSelect(id, headers, withNone) {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '';
+    if (withNone) {
+      const noneOpt = document.createElement('option');
+      noneOpt.value = '';
+      noneOpt.textContent = '(none)';
+      sel.appendChild(noneOpt);
+    }
+    headers.forEach(function (h) {
+      const opt = document.createElement('option');
+      opt.value = h;
+      opt.textContent = h;
+      sel.appendChild(opt);
+    });
+  }
+</script>
+{% endblock %}

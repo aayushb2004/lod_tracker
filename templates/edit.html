@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Edit LOD Entry</h1>
+
+<form method="post">
+  <div class="field-row">
+    <label>Date
+      <input type="date" name="date" value="{{ entry.date }}" required>
+    </label>
+    <label>Title / Property
+      <input type="text" name="title" list="titles" value="{{ entry.title }}" required>
+      <datalist id="titles">
+        {% for t in titles %}<option value="{{ t }}">{% endfor %}
+      </datalist>
+    </label>
+    <label>POC
+      <input type="text" name="poc" list="pocs" value="{{ entry.poc }}">
+      <datalist id="pocs">
+        {% for p in pocs %}<option value="{{ p }}">{% endfor %}
+      </datalist>
+    </label>
+  </div>
+
+  <div class="entry-row">
+    <label>User ID
+      <input type="text" name="user_id" value="{{ entry.user_id }}">
+    </label>
+    <label>Call summary
+      <textarea name="summary" rows="5">{{ entry.summary }}</textarea>
+    </label>
+    <p class="hint">Tip: start a line with "- " to make it a bullet point in the dashboard view.</p>
+    <div class="tag-checks">
+      {% for tag in tags %}
+      <label class="tag-chip">
+        <input type="checkbox" name="tags" value="{{ tag }}" {% if tag in current_tags %}checked{% endif %}> {{ tag }}
+      </label>
+      {% endfor %}
+    </div>
+    <label>New tags (comma separated)
+      <input type="text" name="newtags" placeholder="e.g. price sensitive, repeat visitor">
+    </label>
+  </div>
+
+  <button type="submit" class="primary">Save Changes</button>
+  <a class="btn secondary" href="{{ url_for('dashboard') }}">Cancel</a>
+</form>
+{% endblock %}

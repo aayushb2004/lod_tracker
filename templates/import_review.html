@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Review Imported Entries</h1>
+<p>
+  Parsed {{ total_rows }} row{{ 's' if total_rows != 1 else '' }} &mdash;
+  {{ skipped_empty }} skipped (no transcript),
+  {{ skipped_duplicate }} skipped (already imported),
+  {{ candidates|length }} ready to review below.
+</p>
+
+{% if candidates %}
+<form method="post" action="{{ url_for('add') }}" id="import-form">
+  <input type="hidden" name="date" value="{{ date }}">
+  <input type="hidden" name="title" value="{{ title }}">
+  <datalist id="pocs">
+    {% for p in pocs %}<option value="{{ p }}">{% endfor %}
+  </datalist>
+
+  <div id="rows-container">
+    {% for c in candidates %}
+    <div class="entry-row">
+      <div class="field-row">
+        <label>User ID
+          <input type="text" name="user_id_{{ loop.index0 }}" value="{{ c.user_id }}">
+        </label>
+        <label>POC
+          <input type="text" name="poc_{{ loop.index0 }}" list="pocs" value="{{ c.poc }}">
+        </label>
+        <button type="button" class="remove-row danger">Remove</button>
+      </div>
+      <label>Call summary
+        <textarea name="summary_{{ loop.index0 }}" rows="3">{{ c.summary }}</textarea>
+      </label>
+      <p class="hint">Tip: start a line with "- " to make it a bullet point in the dashboard view.</p>
+      <div class="tag-checks">
+        {% for tag in tags %}
+        <label class="tag-chip">
+          <input type="checkbox" name="tags_{{ loop.index0 }}" value="{{ tag }}"> {{ tag }}
+        </label>
+        {% endfor %}
+      </div>
+      <label>New tags (comma separated)
+        <input type="text" name="newtags_{{ loop.index0 }}" placeholder="e.g. price sensitive, repeat visitor">
+      </label>
+    </div>
+    {% endfor %}
+  </div>
+
+  <button type="submit" class="primary">Save All Entries</button>
+  <a class="btn secondary" href="{{ url_for('import_csv') }}">Cancel</a>
+</form>
+
+<script>
+  document.querySelectorAll('.remove-row').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      btn.closest('.entry-row').remove();
+    });
+  });
+</script>
+{% else %}
+<p>No new entries to import from this file.</p>
+<a class="btn secondary" href="{{ url_for('import_csv') }}">Try another file</a>
+{% endif %}
+{% endblock %}

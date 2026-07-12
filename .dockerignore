@@ -1,0 +1,8 @@
+lod.db
+data/
+run_local.ps1
+.env
+__pycache__/
+*.pyc
+.git
+.agent-memory

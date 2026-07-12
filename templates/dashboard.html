@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Dashboard</h1>
+{% if flash %}<p class="success">{{ flash }}</p>{% endif %}
+
+<form method="get" class="filters">
+  <label>From <input type="date" name="date_from" value="{{ filters.get('date_from','') }}"></label>
+  <label>To <input type="date" name="date_to" value="{{ filters.get('date_to','') }}"></label>
+  <label>Title
+    <select name="title">
+      <option value="">All</option>
+      {% for t in titles %}
+      <option value="{{ t }}" {% if filters.get('title')==t %}selected{% endif %}>{{ t }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>POC
+    <select name="poc">
+      <option value="">All</option>
+      {% for p in pocs %}
+      <option value="{{ p }}" {% if filters.get('poc')==p %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Search <input type="text" name="search" value="{{ filters.get('search','') }}" placeholder="summary or user id"></label>
+
+  <div class="tag-groups-wrap">
+    <div class="tag-groups-hint">Tick tags in a box for <strong>OR</strong>. Add another box for <strong>AND</strong>.</div>
+    <div id="tag-groups">
+      {% for group in tag_groups %}
+      <div class="tag-group">
+        {% if not loop.first %}<div class="and-label">AND</div>{% endif %}
+        <div class="tag-group-box">
+          <div class="tag-checks">
+            {% for t in all_tags %}
+            <label class="tag-chip">
+              <input type="checkbox" name="tags_g{{ group.index }}" value="{{ t }}" {% if t in group.selected %}checked{% endif %}> {{ t }}
+            </label>
+            {% endfor %}
+          </div>
+          <button type="button" class="remove-group danger small">Remove box</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <button type="button" id="add-group-btn" class="secondary small">+ Add AND box</button>
+  </div>
+
+  <template id="group-template">
+    <div class="tag-group">
+      <div class="and-label">AND</div>
+      <div class="tag-group-box">
+        <div class="tag-checks">
+          {% for t in all_tags %}
+          <label class="tag-chip">
+            <input type="checkbox" name="tags_g__GIDX__" value="{{ t }}"> {{ t }}
+          </label>
+          {% endfor %}
+        </div>
+        <button type="button" class="remove-group danger small">Remove box</button>
+      </div>
+    </div>
+  </template>
+
+  <div class="field-row">
+    <button type="submit" class="primary">Apply Filters</button>
+    <button type="submit" formaction="{{ url_for('export') }}" class="secondary">Export CSV</button>
+    <a href="{{ url_for('dashboard') }}">Reset</a>
+  </div>
+</form>
+
+<script>
+  (function () {
+    const container = document.getElementById('tag-groups');
+    const template = document.getElementById('group-template');
+    let gidx = {{ tag_groups|length }};
+
+    function wireRemove(el) {
+      el.querySelector('.remove-group').addEventListener('click', () => el.remove());
+    }
+
+    document.querySelectorAll('.tag-group').forEach(wireRemove);
+
+    document.getElementById('add-group-btn').addEventListener('click', () => {
+      const html = template.innerHTML.replaceAll('__GIDX__', gidx);
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = html;
+      const groupEl = wrapper.firstElementChild;
+      wireRemove(groupEl);
+      container.appendChild(groupEl);
+      gidx++;
+    });
+  })();
+</script>
+
+<p>
+  {{ total }} entr{{ 'y' if total == 1 else 'ies' }} matched{% if has_tag_filter %} out of {{ total_without_tags }}{% endif %}
+</p>
+
+{% if tag_counts %}
+<div class="tag-counts">
+  {% for tag, count in tag_counts.items() %}
+  <span class="tag-count-chip">{{ tag }}: {{ count }}</span>
+  {% endfor %}
+</div>
+{% endif %}
+
+<table>
+  <thead>
+    <tr><th>Date</th><th>Title</th><th>POC</th><th>User ID</th><th>Summary</th><th>Tags</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for e in entries %}
+    <tr>
+      <td>{{ e.date }}</td>
+      <td>{{ e.title }}</td>
+      <td>{{ e.poc }}</td>
+      <td>{{ e.user_id }}</td>
+      <td class="summary-cell">{{ e.summary_html }}</td>
+      <td>{% for t in e.tags %}<span class="tag-chip small">{{ t }}</span>{% endfor %}</td>
+      <td>
+        <div class="actions-cell">
+          <a class="btn secondary" href="{{ url_for('edit_entry', entry_id=e.id) }}">Edit</a>
+          <form method="post" action="{{ url_for('delete_entry', entry_id=e.id) }}" onsubmit="return confirm('Delete this entry?')">
+            <button type="submit" class="danger">Delete</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

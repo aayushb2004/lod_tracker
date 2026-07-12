@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LOD Tracker</title>
+  <script>
+    (function () {
+      var saved = localStorage.getItem('lod-theme');
+      if (saved) document.documentElement.setAttribute('data-theme', saved);
+    })();
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav class="topnav">
+    <span class="brand">LOD Tracker</span>
+    <a href="{{ url_for('dashboard') }}">Dashboard</a>
+    <a href="{{ url_for('add') }}">+ Add Entry</a>
+    <a href="{{ url_for('import_csv') }}">Import CSV</a>
+    <button type="button" id="theme-toggle"></button>
+  </nav>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    (function () {
+      var btn = document.getElementById('theme-toggle');
+
+      function currentTheme() {
+        var explicit = document.documentElement.getAttribute('data-theme');
+        if (explicit) return explicit;
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+
+      function render() {
+        btn.textContent = currentTheme() === 'dark' ? '☀️ Light' : '🌙 Dark';
+      }
+
+      btn.addEventListener('click', function () {
+        var next = currentTheme() === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('lod-theme', next);
+        render();
+      });
+
+      render();
+    })();
+  </script>
+  <script>
+    document.addEventListener('submit', function (e) {
+      if (e.defaultPrevented) return;
+      var form = e.target;
+      if ((form.method || '').toLowerCase() !== 'post') return;
+      var btn = e.submitter;
+      if (!btn || btn.tagName !== 'BUTTON') return;
+      if (btn.dataset.submitting === '1') {
+        e.preventDefault();
+        return;
+      }
+      btn.dataset.submitting = '1';
+      btn.dataset.originalText = btn.textContent;
+      btn.textContent = 'Saving...';
+      btn.style.opacity = '0.6';
+      btn.style.pointerEvents = 'none';
+    });
+
+    window.addEventListener('pageshow', function () {
+      document.querySelectorAll('button[data-submitting="1"]').forEach(function (btn) {
+        btn.dataset.submitting = '';
+        btn.style.opacity = '';
+        btn.style.pointerEvents = '';
+        if (btn.dataset.originalText) btn.textContent = btn.dataset.originalText;
+      });
+    });
+  </script>
+</body>
+</html>

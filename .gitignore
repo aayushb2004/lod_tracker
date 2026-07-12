@@ -1,0 +1,8 @@
+run_local.ps1
+.env
+lod.db
+data/
+dist/
+.claude/
+__pycache__/
+*.pyc

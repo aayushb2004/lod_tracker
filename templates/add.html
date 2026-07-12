@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Add LOD Entry</h1>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<form method="post" id="add-form">
+  <div class="field-row">
+    <label>Date
+      <input type="date" name="date" value="{{ today }}" required>
+    </label>
+    <label>Title / Property
+      <input type="text" name="title" list="titles" placeholder="e.g. Branded Offer" required>
+      <datalist id="titles">
+        {% for t in titles %}<option value="{{ t }}">{% endfor %}
+      </datalist>
+    </label>
+    <label>POC (who's doing these calls)
+      <input type="text" name="poc" list="pocs" placeholder="e.g. your name">
+      <datalist id="pocs">
+        {% for p in pocs %}<option value="{{ p }}">{% endfor %}
+      </datalist>
+    </label>
+  </div>
+
+  <div id="rows-container"></div>
+
+  <button type="button" id="add-row-btn" class="secondary">+ Add another user</button>
+  <button type="submit" class="primary">Save Entries</button>
+</form>
+
+<template id="row-template">
+  <div class="entry-row" data-idx="__IDX__">
+    <div class="field-row">
+      <label>User ID
+        <input type="text" name="user_id___IDX__" placeholder="User ID">
+      </label>
+      <button type="button" class="remove-row danger">Remove</button>
+    </div>
+    <label>Call summary
+      <textarea name="summary___IDX__" rows="3" placeholder="Short summary of the call"></textarea>
+    </label>
+    <p class="hint">Tip: start a line with "- " to make it a bullet point in the dashboard view.</p>
+    <div class="tag-checks">
+      {% for tag in tags %}
+      <label class="tag-chip">
+        <input type="checkbox" name="tags___IDX__" value="{{ tag }}"> {{ tag }}
+      </label>
+      {% endfor %}
+    </div>
+    <label>New tags (comma separated)
+      <input type="text" name="newtags___IDX__" placeholder="e.g. price sensitive, repeat visitor">
+    </label>
+  </div>
+</template>
+
+<script>
+  let idx = 0;
+  const container = document.getElementById('rows-container');
+  const template = document.getElementById('row-template');
+
+  function addRow() {
+    const html = template.innerHTML.replaceAll('__IDX__', idx);
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+    const rowEl = wrapper.firstElementChild;
+    rowEl.querySelector('.remove-row').addEventListener('click', () => rowEl.remove());
+    container.appendChild(rowEl);
+    idx++;
+  }
+
+  document.getElementById('add-row-btn').addEventListener('click', addRow);
+  addRow();
+</script>
+{% endblock %}
