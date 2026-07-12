@@ -1,15 +1,22 @@
 import csv
 import io
+import json
 import os
 import time
 from datetime import date
+from urllib.parse import parse_qsl
 
+import anthropic
 import psycopg2
 import psycopg2.extras
 from flask import Flask, Response, g, jsonify, redirect, render_template, request, url_for
 from markupsafe import Markup, escape
+from werkzeug.datastructures import MultiDict
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
+AI_ENABLED = bool(os.environ.get("ANTHROPIC_API_KEY"))
+ai_client = anthropic.Anthropic() if AI_ENABLED else None
+AI_MODEL = "claude-opus-4-8"
 DEFAULT_TAGS = [
     "Aware of Meesho Mall",
     "Recall of Branded Offer page",
@@ -481,6 +488,7 @@ def dashboard():
         total=len(entries),
         total_without_tags=total_without_tags,
         flash=request.args.get("flash"),
+        ai_enabled=AI_ENABLED,
     )
 
 
@@ -640,6 +648,165 @@ def import_csv():
         today=date.today().isoformat(),
         error=None,
     )
+
+
+def _ai_unavailable():
+    return jsonify({"error": "AI is not configured yet — the ANTHROPIC_API_KEY environment variable is missing."}), 503
+
+
+@app.route("/api/suggest_tags", methods=["POST"])
+def suggest_tags():
+    if ai_client is None:
+        return _ai_unavailable()
+    data = request.get_json(silent=True) or {}
+    summary = (data.get("summary") or "").strip()
+    if not summary:
+        return jsonify({"error": "Write a call summary first."}), 400
+
+    db = get_db()
+    all_tags, _titles, _pocs = get_meta(db)
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "existing_tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Tags from the provided list that apply to this transcript, verbatim.",
+            },
+            "new_tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Up to 3 concise new tags for clear patterns not covered by existing tags.",
+            },
+        },
+        "required": ["existing_tags", "new_tags"],
+        "additionalProperties": False,
+    }
+
+    try:
+        response = ai_client.messages.create(
+            model=AI_MODEL,
+            max_tokens=4096,
+            output_config={"effort": "low", "format": {"type": "json_schema", "schema": schema}},
+            system=(
+                "You tag user-research call transcripts for Meesho's LOD (Listen or Die) tracker. "
+                "Given a transcript and the list of existing tags, decide which existing tags apply, "
+                "and suggest at most 3 new tags only for clear behavioral patterns the existing tags "
+                "don't cover. existing_tags must contain only values from the provided list, verbatim. "
+                "New tags must be short (2-4 words), lowercase, and reusable across many calls — "
+                "behavioral patterns like 'price sensitive', not one-off details."
+            ),
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"Existing tags: {json.dumps(all_tags)}\n\nTranscript:\n{summary}",
+                }
+            ],
+        )
+    except anthropic.RateLimitError:
+        return jsonify({"error": "AI is rate-limited right now — try again in a minute."}), 429
+    except anthropic.APIStatusError as e:
+        return jsonify({"error": f"AI request failed ({e.status_code})."}), 502
+    except anthropic.APIConnectionError:
+        return jsonify({"error": "Could not reach the AI service."}), 502
+
+    text = next((b.text for b in response.content if b.type == "text"), "")
+    try:
+        result = json.loads(text)
+    except ValueError:
+        return jsonify({"error": "AI returned an unreadable response — try again."}), 502
+
+    valid = set(all_tags)
+    existing = [t for t in result.get("existing_tags", []) if t in valid]
+    new = []
+    for t in result.get("new_tags", []):
+        t = t.strip()
+        if t and t not in valid and t not in new:
+            new.append(t)
+    return jsonify({"existing_tags": existing, "new_tags": new[:3]})
+
+
+@app.route("/api/ask", methods=["POST"])
+def ai_ask():
+    if ai_client is None:
+        return _ai_unavailable()
+    data = request.get_json(silent=True) or {}
+    question = (data.get("question") or "").strip()
+    if not question:
+        return jsonify({"error": "Ask a question first."}), 400
+
+    raw_history = data.get("history") or []
+    history = [
+        {"role": m["role"], "content": m["content"]}
+        for m in raw_history
+        if isinstance(m, dict)
+        and m.get("role") in ("user", "assistant")
+        and isinstance(m.get("content"), str)
+        and m["content"].strip()
+    ][-20:]
+
+    # Rebuild the dashboard's filter state from its query string so the AI
+    # sees exactly the entries the user is looking at.
+    qs = (data.get("filters") or "").lstrip("?")
+    args = MultiDict(parse_qsl(qs, keep_blank_values=False))
+
+    db = get_db()
+    entries = fetch_entries_with_tags(db, args)
+
+    MAX_ENTRIES = 300
+    truncated = len(entries) > MAX_ENTRIES
+    lines = []
+    for e in entries[:MAX_ENTRIES]:
+        tags = ", ".join(e["tags"]) or "none"
+        lines.append(
+            f"[{e['date']}] {e['title']} | POC: {e['poc'] or 'unknown'} | "
+            f"User: {e['user_id']} | Tags: {tags}\nNotes: {e['summary']}"
+        )
+    context = "\n\n".join(lines) if lines else "No entries match the current filters."
+
+    system_text = (
+        "You are an analyst for Meesho's LOD (Listen or Die) tracker — a log of "
+        "user-research call notes. Answer questions about the entries below. "
+        "Be concise and specific: give counts, name patterns, and cite user IDs "
+        "where relevant. If the notes don't contain enough information to answer, "
+        "say so plainly rather than guessing."
+    )
+    if truncated:
+        system_text += f"\n\nNote: only the first {MAX_ENTRIES} of {len(entries)} matching entries are shown."
+    system_text += (
+        f"\n\nThe user's current dashboard filters match {len(entries)} "
+        f"entr{'y' if len(entries) == 1 else 'ies'}:\n\n{context}"
+    )
+
+    try:
+        response = ai_client.messages.create(
+            model=AI_MODEL,
+            max_tokens=4096,
+            thinking={"type": "adaptive"},
+            system=[
+                {
+                    "type": "text",
+                    "text": system_text,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=history + [{"role": "user", "content": question}],
+        )
+    except anthropic.RateLimitError:
+        return jsonify({"error": "AI is rate-limited right now — try again in a minute."}), 429
+    except anthropic.APIStatusError as e:
+        return jsonify({"error": f"AI request failed ({e.status_code})."}), 502
+    except anthropic.APIConnectionError:
+        return jsonify({"error": "Could not reach the AI service."}), 502
+
+    if response.stop_reason == "refusal":
+        return jsonify({"error": "The AI declined to answer this question."}), 502
+
+    answer = "".join(b.text for b in response.content if b.type == "text").strip()
+    if not answer:
+        return jsonify({"error": "AI returned an empty response — try again."}), 502
+    return jsonify({"answer": answer})
 
 
 @app.route("/delete/<int:entry_id>", methods=["POST"])

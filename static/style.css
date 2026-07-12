@@ -219,3 +219,29 @@ th { background: var(--table-header-bg); font-size: 12px; text-transform: upperc
 .summary-cell ul:last-child { margin-bottom: 0; }
 
 .actions-cell { display: flex; gap: 6px; align-items: center; }
+
+.ai-panel {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px; margin-bottom: 16px;
+}
+.ai-panel-header { font-weight: 600; margin-bottom: 8px; }
+.ai-panel-header .hint { font-weight: 400; margin: 0 0 0 8px; }
+#ai-messages { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+#ai-messages:not(:empty) { margin-bottom: 10px; }
+.ai-msg {
+  padding: 8px 12px; border-radius: 8px; font-size: 13px; white-space: pre-wrap;
+  max-width: 85%;
+}
+.ai-msg.user { background: var(--secondary-bg); color: var(--secondary-text); align-self: flex-end; }
+.ai-msg.assistant { background: var(--surface-alt); border: 1px solid var(--border); align-self: flex-start; }
+.ai-msg.pending { color: var(--text-muted); font-style: italic; }
+.ai-msg.error { background: var(--danger-bg); color: var(--danger-text); align-self: flex-start; }
+.ai-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.ai-controls input { flex: 1; min-width: 220px; }
+
+.suggested-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; font-size: 12px; color: var(--text-muted); }
+.tag-chip.suggestion {
+  background: var(--chip-count-bg); color: var(--chip-count-text); border: 1px dashed var(--chip-count-text);
+  cursor: pointer; padding: 4px 10px; font-size: 12px;
+}
+button.suggest-tags { margin: 4px 0; }

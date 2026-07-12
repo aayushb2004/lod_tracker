@@ -97,6 +97,100 @@
   {{ total }} entr{{ 'y' if total == 1 else 'ies' }} matched{% if has_tag_filter %} out of {{ total_without_tags }}{% endif %}
 </p>
 
+<div class="ai-panel">
+  <div class="ai-panel-header">
+    ✨ AI Insights
+    <span class="hint">
+      {% if ai_enabled %}
+        answers are based on the {{ total }} currently filtered entr{{ 'y' if total == 1 else 'ies' }}
+      {% else %}
+        not configured yet — set the ANTHROPIC_API_KEY environment variable to enable
+      {% endif %}
+    </span>
+  </div>
+  <div id="ai-messages"></div>
+  <div class="ai-controls">
+    <button type="button" id="ai-summarize" class="secondary">Summarize these entries</button>
+    <input type="text" id="ai-question" placeholder="Ask a follow-up, e.g. how many of these had mall recall?">
+    <button type="button" id="ai-ask" class="primary">Ask</button>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var history = [];
+    var messagesEl = document.getElementById('ai-messages');
+    var input = document.getElementById('ai-question');
+    var askBtn = document.getElementById('ai-ask');
+    var sumBtn = document.getElementById('ai-summarize');
+
+    function addMsg(cls, text) {
+      var div = document.createElement('div');
+      div.className = 'ai-msg ' + cls;
+      div.textContent = text;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return div;
+    }
+
+    function setBusy(busy) {
+      askBtn.disabled = busy;
+      sumBtn.disabled = busy;
+      input.disabled = busy;
+    }
+
+    async function ask(question) {
+      if (!question.trim()) return;
+      addMsg('user', question);
+      var pending = addMsg('assistant pending', 'Thinking…');
+      setBusy(true);
+      try {
+        var resp = await fetch('/api/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: question,
+            history: history,
+            filters: window.location.search,
+          }),
+        });
+        var data = await resp.json();
+        if (!resp.ok) {
+          pending.className = 'ai-msg error';
+          pending.textContent = data.error || 'AI request failed.';
+          return;
+        }
+        pending.className = 'ai-msg assistant';
+        pending.textContent = data.answer;
+        history.push({ role: 'user', content: question });
+        history.push({ role: 'assistant', content: data.answer });
+      } catch (err) {
+        pending.className = 'ai-msg error';
+        pending.textContent = 'Network error — try again.';
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    sumBtn.addEventListener('click', function () {
+      ask('Give a brief summary of these LOD entries: the main themes, notable patterns across users, and anything that stands out.');
+    });
+    askBtn.addEventListener('click', function () {
+      var q = input.value;
+      input.value = '';
+      ask(q);
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var q = input.value;
+        input.value = '';
+        ask(q);
+      }
+    });
+  })();
+</script>
+
 {% if tag_counts %}
 <div class="tag-counts">
   {% for tag, count in tag_counts.items() %}

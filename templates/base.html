@@ -74,5 +74,66 @@
       });
     });
   </script>
+  <script>
+    // AI tag suggestions — works on any page with .suggest-tags buttons inside .entry-row
+    document.addEventListener('click', async function (e) {
+      var btn = e.target.closest('.suggest-tags');
+      if (!btn) return;
+      var row = btn.closest('.entry-row');
+      var summary = (row.querySelector('textarea') || {}).value || '';
+      var box = row.querySelector('.suggested-tags');
+      if (!summary.trim()) {
+        box.textContent = 'Write a call summary first.';
+        return;
+      }
+      btn.disabled = true;
+      var orig = btn.textContent;
+      btn.textContent = 'Thinking…';
+      box.textContent = '';
+      try {
+        var resp = await fetch('/api/suggest_tags', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ summary: summary }),
+        });
+        var data = await resp.json();
+        if (!resp.ok) {
+          box.textContent = data.error || 'Suggestion failed.';
+          return;
+        }
+        var matched = 0;
+        (data.existing_tags || []).forEach(function (t) {
+          row.querySelectorAll('.tag-checks input[type="checkbox"]').forEach(function (cb) {
+            if (cb.value === t && !cb.checked) { cb.checked = true; matched++; }
+          });
+        });
+        (data.new_tags || []).forEach(function (t) {
+          var chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'tag-chip suggestion';
+          chip.textContent = '+ ' + t;
+          chip.addEventListener('click', function () {
+            var inp = row.querySelector('input[name^="newtags"]');
+            inp.value = inp.value.trim() ? inp.value.trim() + ', ' + t : t;
+            chip.remove();
+          });
+          box.appendChild(chip);
+        });
+        if (!matched && !(data.new_tags || []).length) {
+          box.textContent = 'No tag suggestions for this summary.';
+        } else if (matched) {
+          var note = document.createElement('span');
+          note.className = 'hint';
+          note.textContent = matched + ' existing tag' + (matched > 1 ? 's' : '') + ' ticked. ';
+          box.prepend(note);
+        }
+      } catch (err) {
+        box.textContent = 'Network error — try again.';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = orig;
+      }
+    });
+  </script>
 </body>
 </html>
