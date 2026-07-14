@@ -29,7 +29,7 @@
     <div id="tag-groups">
       {% for group in tag_groups %}
       <div class="tag-group">
-        {% if not loop.first %}<div class="and-label">AND</div>{% endif %}
+        <div class="and-label">AND</div>
         <div class="tag-group-box">
           <div class="tag-checks">
             {% for t in all_tags %}
